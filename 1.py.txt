@@ -1,0 +1,45 @@
+import time
+import smbus2
+import bme280
+import paho.mqtt.client as mqtt
+# BME280 settings
+port = 1
+address = 0x76
+bus = smbus2.SMBus(port)
+calibration_params = bme280.load_calibration_params(bus, address)
+# MQTT settings
+mqtt_broker = "test.mosquitto.org"
+mqtt_topic_temperature = "tp/eng/iotp_lab/pc_01/temperature"
+mqtt_topic_humidity = "tp/eng/iotp_lab/pc_01/humidity"
+mqtt_topic_buzzer = "tp/eng/iotp_lab/pc_01" # Added buzzer topic
+mqtt_topic_fan = "tp/eng/iotp_lab/pc_01/fan"
+# Create the MQTT client and connect
+mqtt_client = mqtt.Client()
+
+mqtt_client.connect(mqtt_broker, port=1883)
+# Create BME280 sensor
+def read_bme280_data():
+data = bme280.sample(bus, address, calibration_params)
+return data.temperature, data.humidity
+# Publish sensor data to MQTT topics
+def publish_sensor_data(temperature, humidity):
+mqtt_client.publish(mqtt_topic_temperature, str(temperature))
+mqtt_client.publish(mqtt_topic_humidity, str(humidity))
+# Check if temperature exceeds 30 and publish to activate buzzer
+if temperature > 30:
+mqtt_client.publish(mqtt_topic_buzzer, "on")
+mqtt_client.publish(mqtt_topic_fan, "fan on")
+try: while True:
+# Read BME280 sensor data
+temperature, humidity = read_bme280_data()
+# Publish sensor data to MQTT topics and activate buzzer if needed
+publish_sensor_data(temperature, humidity)
+print(f"Temperature: {temperature} °C, Humidity: {humidity}%")
+# Sleep between iterations
+time.sleep(10) # Adjust the interval as needed
+except KeyboardInterrupt:
+print("Script terminated by user.")
+finally:
+# Disconnect from MQTT broker
+mqtt_client.disconnect()
+print("--disconnected from broker")

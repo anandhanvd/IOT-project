@@ -1,0 +1,87 @@
+import time
+import paho.mqtt.client as mqtt
+import json
+from influxdb import InfluxDBClient
+from flask import Flask, render_template, request
+import paho.mqtt.publish as publish
+
+app = Flask(__name__)
+
+# MQTT settings
+mqtt_broker = "test.mosquitto.org"
+mqtt_topic_temperature = "tp/eng/iotp_lab/pc_01/temperature"
+mqtt_topic_humidity = "tp/eng/iotp_lab/pc_01/humidity"
+mqtt_topic_buzzer = "tp/eng/iotp_lab/pc_01"
+mqtt_topic_fan = "tp/eng/iotp_lab/pc_01/fan"
+
+influx_host = "localhost"
+influx_port = 8086
+influx_db_temp = "mydb"
+influx_db_humidity = "sub"
+
+influx_client = InfluxDBClient(influx_host, influx_port)
+
+def onMessage(client, userdata, message):
+    try:
+        payload = json.loads(message.payload.decode('utf-8'))
+
+        if message.topic == mqtt_topic_temperature:
+            store_in_influxdb(payload, influx_db_temp, "temperature")
+
+        elif message.topic == mqtt_topic_humidity:
+            store_in_influxdb(payload, influx_db_humidity, "humidity")
+
+    except Exception as e:
+        print(f"Error processing message: {str(e)}")
+
+def store_in_influxdb(value, database, measurement_name):
+    influx_client.switch_database(database)
+    json_body = [
+        {
+            "measurement": measurement_name,
+            "fields": {
+                "value": value
+            }
+        }
+    ]
+    influx_client.write_points(json_body)
+    print(f"Stored in InfluxDB - Database: {database}, Measurement: {measurement_name}, Value: {value}")
+
+def startMQTT():
+    my_mqtt = mqtt.Client()
+    my_mqtt.on_message = onMessage
+    my_mqtt.connect(mqtt_broker, port=1883)
+    my_mqtt.subscribe(mqtt_topic_temperature, qos=1)
+    my_mqtt.subscribe(mqtt_topic_humidity, qos=1)    
+    my_mqtt.loop_start()
+    print("Subscribed to topics")
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/control', methods=['POST'])
+def control():
+    buzzer_status = request.form['buzzer_status']
+    fan_status = request.form['fan_status']
+
+    # Publish MQTT messages based on button clicks
+    if buzzer_status == 'on':
+        publish.single(mqtt_topic_buzzer, "on", hostname=mqtt_broker)
+    elif buzzer_status == 'off':
+        publish.single(mqtt_topic_buzzer, "off", hostname=mqtt_broker)
+
+    if fan_status == 'on':
+        publish.single(mqtt_topic_fan, "fan on", hostname=mqtt_broker)
+    elif fan_status == 'off':
+        publish.single(mqtt_topic_fan, "fan off", hostname=mqtt_broker)
+    return render_template('index.html')
+
+try:
+    startMQTT()
+    app.run(debug=True)
+
+except KeyboardInterrupt:
+    print("Script terminated by user.")
+finally:
+    print("--disconnected from broker")

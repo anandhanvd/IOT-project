@@ -1,0 +1,68 @@
+import time
+import RPi.GPIO as GPIO
+import paho.mqtt.client as mqtt
+# GPIO settings for the buzzer and fan
+buzzer_pin = 21
+fan_pin = 20
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(buzzer_pin, GPIO.OUT) # Set the buzzer pin as an output, initially low
+GPIO.setup(fan_pin, GPIO.OUT) # Set the fan pin as an output, initially low
+# MQTT settings
+mqtt_broker = "test.mosquitto.org"
+mqtt_topic_buzzer = "tp/eng/iotp_lab/pc_01"
+mqtt_topic_fan = "tp/eng/iotp_lab/pc_01/fan"
+# Function to handle buzzer messages
+def on_message_buzzer(client, userdata, message):
+payload = message.payload.decode('utf-8').lower()
+print(f"Received message on topic {message.topic}: {payload}")
+if payload == "on":
+print("Buzzer activated.")
+buzzer_on()
+elif payload == "off":
+print("Buzzer deactivated.")
+buzzer_off()
+# Function to handle fan messages
+def on_message_fan(client, userdata, message):
+payload = message.payload.decode('utf-8').lower()
+print(f"Received message on topic {message.topic}: {payload}")
+if payload == "fan on":
+print("Fan activated.")
+fan_on()
+elif payload == "fan off":
+print("Fan deactivated.")
+fan_off()
+# Function to turn the buzzer off
+def buzzer_off():
+GPIO.output(buzzer_pin, GPIO.LOW)
+# Function to turn the buzzer on
+def buzzer_on():
+GPIO.output(buzzer_pin, GPIO.HIGH)
+AY 2022/2023 Oct Property of TP, Copyright © Page 6 of 12
+# Function to turn the fan off
+def fan_off():
+GPIO.output(fan_pin, GPIO.LOW)
+# Function to turn the fan on
+def fan_on():
+GPIO.output(fan_pin, GPIO.HIGH)
+try:#
+Create the MQTT client and connect
+mqtt_client = mqtt.Client()
+# Register the callback functions for the buzzer and fan topics
+mqtt_client.message_callback_add(mqtt_topic_buzzer, on_message_buzzer)
+mqtt_client.message_callback_add(mqtt_topic_fan, on_message_fan)
+mqtt_client.connect(mqtt_broker, port=1883)
+# Subscribe to the buzzer and fan topics
+mqtt_client.subscribe(mqtt_topic_buzzer)
+mqtt_client.subscribe(mqtt_topic_fan)
+while True:
+mqtt_client.loop()
+time.sleep(1) # Adjust the interval as needed
+except KeyboardInterrupt:
+print("Script terminated by user.")
+finally:
+# Cleanup GPIO settings
+GPIO.cleanup()
+print("--GPIO cleanup")
+# Disconnect from MQTT broker
+mqtt_client.disconnect()
+print("--disconnected from broker"

@@ -1,0 +1,82 @@
+import RPi.GPIO as GPIO
+import time
+import paho.mqtt.client as mqtt
+import smbus2
+import bme280
+
+BUZZER_PIN = 18
+FAN_PIN = 16
+TEMP_THRESHOLD = 30
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(BUZZER_PIN, GPIO.OUT)
+GPIO.setup(FAN_PIN, GPIO.OUT)
+
+# MQTT settings
+mqtt_broker = "test.mosquitto.org"
+mqtt_topic_buzzer = "gpio/buzzer"
+mqtt_topic_fan = "gpio/fan"
+mqtt_topic_sensor = "sensor"
+
+mqtt_client = mqtt.Client()
+
+# BME Sensor setup
+port = 1
+address = 0x76
+bus = smbus2.SMBus(port)
+calibration_params = bme280.load_calibration_params(bus, address)
+
+def send_sensor_data_mqtt(data):
+    # Publish temperature
+    mqtt_client.publish(mqtt_topic_sensor + "/temperature", str(data.temperature))
+
+    # Publish pressure
+    mqtt_client.publish(mqtt_topic_sensor + "/pressure", str(data.pressure))
+
+    # Publish humidity
+    mqtt_client.publish(mqtt_topic_sensor + "/humidity", str(data.humidity))
+
+def on_connect(client, userdata, flags, rc):
+    print("Connected to MQTT Broker with result code " + str(rc))
+    client.subscribe(mqtt_topic_buzzer)
+    client.subscribe(mqtt_topic_fan)
+
+def on_message(client, userdata, msg):
+    if msg.topic == mqtt_topic_buzzer:
+        handle_buzzer_message(msg.payload.decode())
+    elif msg.topic == mqtt_topic_fan:
+        handle_fan_message(msg.payload.decode())
+
+def handle_buzzer_message(message):
+    if message == "on":
+        GPIO.output(BUZZER_PIN, GPIO.HIGH)
+    elif message == "off":
+        GPIO.output(BUZZER_PIN, GPIO.LOW)
+
+def handle_fan_message(message):
+    if message == "on":
+        GPIO.output(FAN_PIN, GPIO.HIGH)
+    elif message == "off":
+        GPIO.output(FAN_PIN, GPIO.LOW)
+
+if __name__ == '__main__':
+    try:
+        mqtt_client.on_connect = on_connect
+        mqtt_client.on_message = on_message
+
+        mqtt_client.connect(mqtt_broker, 1883, 60)
+        mqtt_client.loop_start()
+
+        while True:
+            data = bme280.sample(bus, address, calibration_params)
+            send_sensor_data_mqtt(data)
+            
+            if data.temperature > TEMP_THRESHOLD:
+                GPIO.output(FAN_PIN, GPIO.HIGH)  # Turn on fan if temperature is above threshold
+            else:
+                GPIO.output(FAN_PIN, GPIO.LOW)   # Turn off fan otherwise
+
+            time.sleep(5)  # Adjust the interval as needed
+    except KeyboardInterrupt:
+        mqtt_client.disconnect()
+        GPIO.cleanup()

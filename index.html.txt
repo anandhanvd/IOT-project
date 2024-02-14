@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Data</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.1.2/socket.io.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+</head>
+<body>
+
+<h1>Real-Time Data</h1>
+
+<div id="temperature">
+    <h2>Temperature</h2>
+    <p id="temperature_value"></p>
+    <p id="temperature_timestamp"></p>
+</div>
+
+<div id="humidity">
+    <h2>Humidity</h2>
+    <p id="humidity_value"></p>
+    <p id="humidity_timestamp"></p>
+</div>
+
+<script>
+    var socket = io.connect('http://' + document.domain + ':' + location.port);
+
+    socket.on('update_data', function(data) {
+        if (data.measurement === 'temperature') {
+            $('#temperature_value').text('Temperature: ' + data.value + ' °C');
+            $('#temperature_timestamp').text('Timestamp: ' + data.timestamp);
+        } else if (data.measurement === 'humidity') {
+            $('#humidity_value').text('Humidity: ' + data.value + '%');
+            $('#humidity_timestamp').text('Timestamp: ' + data.timestamp);
+        }
+    });
+
+    function requestData(measurement) {
+        socket.emit('request_data', measurement);
+    }
+
+    $(document).ready(function() {
+        requestData('temperature');
+        requestData('humidity');
+    });
+</script>
+
+</body>
+</html>
